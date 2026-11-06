@@ -1,4 +1,5 @@
 @startuml
+' C4 Container definition
 !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
 
 title Интернет-магазин. Диаграмма контейнеров
@@ -68,12 +69,17 @@ System_Boundary(marketplace_system, "Маркетплейс одежды") {
     ContainerQueue(rabbitmq, "RabbitMQ", "AMQP", "Асинхронный обмен событиями между микросервисами: заказы, оплаты, отзывы, уведомления, аналитика")
 }
 
+System_Boundary(monitoring_system, "Система Мониторинга") {
+    Container(prometheus, "Prometheus", "Go, TSDB", "Собирает и хранит метрики, проверяет alert rules и генерирует сырые алерты")
+    Container(alertmanager, "Alertmanager", "Go", "Группирует, фильтрует алерты и управляет логикой отправки уведомлений")
+}
+
 System_Ext(psp, "Платежный шлюз (PSP)", "ЮKassa")
     payment_svc--> psp: "[HTTPS / API]"
-System_Ext(backup_s3, "Backup Storage", "Yandex Storage Object", "Резервное хранилище")
+System_Ext(backup_s3, "Backup Storage", "Selectel Storage Object", "Резервное хранилище")
     backup_svc---> backup_s3: "HTTPS / S3 API"
 System_Ext(notification_ext, "Шлюзы уведомлений", "Отправка уведомлений")
-    marketplace_system---> notification_ext: "[SMTP+TLS]"
+    alertmanager---> notification_ext: "[SMTP+TLS]"
 
 Rel(buyer, web, "Использует", "HTTPS")
 Rel(seller, web_seller, "Использует", "HTTPS")
@@ -96,4 +102,7 @@ Rel(review_svc, rabbitmq, "Публикует события отзывов", "A
 
 Rel(rabbitmq, order_svc, "Подписка на события оплаты и возврата", "AMQP")
 Rel(rabbitmq, notif_svc, "Подписка на события для уведомлений", "AMQP")
+Rel(prometheus, marketplace_system, "Стягивает метрики", "HTTP")
+Rel(prometheus, alertmanager, "Отправляет сработавшие алерты", "HTTP/JSON")
+
 @enduml
