@@ -24,8 +24,7 @@ System_Boundary(marketplace_system, "Маркетплейс одежды") {
 
     Container(catalog_svc, "Catalog & Products Service", "Go, REST/gRPC", "Управление товарами, позициями товаров, рекомендациями")
         gateway --> catalog_svc: "[gRPC]" 
-    ContainerDb(catalog_db, "Catalog DB", "PostgreSQL", "Реляционные данные каталога.")
-    ContainerDb(opensearch, "OpenSearch", "OpenSearch Engine", "Полнотекстовый поиск и векторный поиск (pgvector / OpenSearch)")
+    ContainerDb(catalog_db, "Catalog DB", "PostgreSQL", "Реляционные данные каталога")
         catalog_svc--> catalog_db: "[Native; TCP/IP]"
 
     Container(media_svc, "Media Service", "Go, REST/gRPC", "Работа с фото и видео, а также с файлами для загрузки SKU и экспорта отчетов")
@@ -91,9 +90,7 @@ Rel(web_seller, gateway, "API вызовы", "HTTPS")
 Rel(web_admin, gateway, "API вызовы", "HTTPS")
 Rel(web_system_admin, gateway, "API вызовы", "HTTPS")
 
-Rel(catalog_svc, opensearch, "Индексация / поиск", "REST")
 Rel(catalog_svc, media_svc, "Запрос ссылок на медиа", "gRPC")
-
 Rel(auth_svc, rabbitmq, "Публикует события удаления или изменения роли пользователей", "AMQP")
 Rel(catalog_svc, rabbitmq, "Публикует события каталога и товаров", "AMQP")
 Rel(order_svc, rabbitmq, "Публикует события заказов", "AMQP")
