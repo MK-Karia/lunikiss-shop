@@ -1,0 +1,99 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Интернет-магазин. Диаграмма контейнеров
+
+Person(buyer, "Пользователь", "Ищет одежду, добавляет товары в корзину, оформляет заказы, оставляет отзывы и возвраты")
+Person(seller, "Продавец", "Работает с карточками товаров, управляет остатками, обрабатывает заказы и отзывы")
+Person(admin, "Администратор", "Модерирует жалобы, возвраты, управляет системными настройками")
+Person(system_admin, "Системный администратор", "Работает с бэкапами, контролирует инфраструктуру сайта")
+
+System_Boundary(marketplace_system, "Маркетплейс одежды") {
+    Container(web, "Веб-интерфейс", "SPA на React, TypeScript", "Предоставляет интерфейс для просмотра и заказа товаров, а также их возврата, комментирования и отправки жалоб")
+    Container(web_seller, "Панель продавца", "SPA на React, TypeScript", "Предоставляет интерфейс для добавления и редактирования товаров, а также работу с заказами и отзывами")
+    Container(web_admin, "Панель администратора", "SPA на React, TypeScript", "Предоставляет интерфейс для работы с возвратами и жалобами, а также настройками рекомендаций")
+    Container(web_system_admin, "Панель сист. администратора", "SPA на React, TypeScript", "Предоставляет интерфейс для работы с бэкапами")
+    
+    Container(gateway, "API Gateway", "Nginx", "Маршрутизация запросов, TLS-терминация, Rate Limiting.")
+
+    Container(auth_svc, "Auth & User Service", "Go, REST/gRPC", "Авторизация, работа с токенами, управление пользователями и их данными")
+    ContainerDb(auth_db, "Auth DB", "PostgreSQL", "Учетные записи и профили")
+        auth_svc--> auth_db: "[Native; TCP/IP]"
+        gateway --> auth_svc: "[gRPC]" 
+
+    Container(catalog_svc, "Catalog & Products Service", "Go, REST/gRPC", "Управление товарами, позициями товаров, рекомендациями")
+        gateway --> catalog_svc: "[gRPC]" 
+    ContainerDb(catalog_db, "Catalog DB", "PostgreSQL", "Реляционные данные каталога.")
+    ContainerDb(opensearch, "OpenSearch", "OpenSearch Engine", "Полнотекстовый поиск и векторный поиск (pgvector / OpenSearch)")
+        catalog_svc--> catalog_db: "[Native; TCP/IP]"
+
+    Container(media_svc, "Media Service", "Go, REST/gRPC", "Работа с фото и видео, а также с файлами для загрузки SKU и экспорта отчетов")
+        gateway --> media_svc: "[gRPC]" 
+    ContainerDb(s3_media, "Media Storage", "MinIO (S3)", "Хранение медиафайлов и документов")
+        media_svc--> s3_media: "[S3 API]"
+    ContainerDb(media_db, "Media DB", "PostgreSQL", "Даннные о медиафайлах")
+        media_svc--> media_db: "[Native; TCP/IP]"
+
+    Container(cart_svc, "Cart & Wishlist Service", "Go, REST/gRPC", "Быстрое управление временными данными (корзина, избранное) покупателя")
+        gateway --> cart_svc: "[gRPC]" 
+    ContainerDb(redis, "Redis Cache", "Кэш корзин и избранных товаров")
+        cart_svc--> redis: "[TCP/IP]"
+
+    Container(order_svc, "Order & Checkout Service", "Go, REST/gRPC", "Работа с оформлением заказов, управление статусами и трек-номерами, а также возвратами")
+        gateway --> order_svc: "[gRPC]" 
+    ContainerDb(order_db, "Orders DB", "PostgreSQL", "Хранение заказов и истории переходов")
+        order_svc--> order_db: "[Native; TCP/IP]"
+
+    Container(payment_svc, "Payment Service", "Go, REST/gRPC", "Работа с оплатой заказов, интеграция с PSP, реализация холдирования средств")
+        gateway --> payment_svc: "[gRPC]" 
+    ContainerDb(payment_db, "Payment DB", "PostgreSQL", "Финансовый баланс, транзакции")
+        payment_svc--> payment_db: "[Native; TCP/IP]"
+
+    Container(review_svc, "Review & Complaint Service", "Go, REST/gRPC", "Работа с отзывами и жалобами")
+        gateway --> review_svc: "[gRPC]" 
+    ContainerDb(review_db, "Feedback DB", "PostgreSQL", "Отзывы и жалобы")
+        review_svc--> review_db: "[Native; TCP/IP]"
+
+    Container(analytics_svc, "Analytics Service", "Go, REST/gRPC", "Сбор данных по продажам, выручке и заказам")
+        gateway --> analytics_svc: "[gRPC]" 
+
+    Container(notif_svc, "Notification Service", "Go, Event Broker", "Хранение и отображение уведомлений")
+        gateway --> notif_svc: "[gRPC]" 
+    ContainerDb(notif_db, "Notifications DB", "PostgreSQL", "История уведомлений")
+        notif_svc--> notif_db: "[Native; TCP/IP]"
+
+    Container(backup_svc, "Backup Service", "Go, Cron", "Работа с бэкапами")
+        gateway --> backup_svc: "[gRPC]" 
+
+    ContainerQueue(rabbitmq, "RabbitMQ", "AMQP", "Асинхронный обмен событиями между микросервисами: заказы, оплаты, отзывы, уведомления, аналитика")
+}
+
+System_Ext(psp, "Платежный шлюз (PSP)", "ЮKassa")
+    payment_svc--> psp: "[HTTPS / API]"
+System_Ext(backup_s3, "Backup Storage", "Yandex Storage Object", "Резервное хранилище")
+    backup_svc---> backup_s3: "HTTPS / S3 API"
+System_Ext(notification_ext, "Шлюзы уведомлений", "Отправка уведомлений")
+    marketplace_system---> notification_ext: "[SMTP+TLS]"
+
+Rel(buyer, web, "Использует", "HTTPS")
+Rel(seller, web_seller, "Использует", "HTTPS")
+Rel(admin, web_admin, "Использует", "HTTPS")
+Rel(system_admin, web_system_admin, "Использует", "HTTPS")
+
+Rel(web, gateway, "API вызовы", "HTTPS")
+Rel(web_seller, gateway, "API вызовы", "HTTPS")
+Rel(web_admin, gateway, "API вызовы", "HTTPS")
+Rel(web_system_admin, gateway, "API вызовы", "HTTPS")
+
+Rel(catalog_svc, opensearch, "Индексация / поиск", "REST")
+Rel(catalog_svc, media_svc, "Запрос ссылок на медиа", "gRPC")
+
+Rel(auth_svc, rabbitmq, "Публикует события удаления или изменения роли пользователей", "AMQP")
+Rel(catalog_svc, rabbitmq, "Публикует события каталога и товаров", "AMQP")
+Rel(order_svc, rabbitmq, "Публикует события заказов", "AMQP")
+Rel(payment_svc, rabbitmq, "Публикует события оплаты", "AMQP")
+Rel(review_svc, rabbitmq, "Публикует события отзывов", "AMQP")
+
+Rel(rabbitmq, order_svc, "Подписка на события оплаты и возврата", "AMQP")
+Rel(rabbitmq, notif_svc, "Подписка на события для уведомлений", "AMQP")
+@enduml
