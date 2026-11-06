@@ -69,7 +69,7 @@ System_Boundary(marketplace_system, "Маркетплейс одежды") {
 }
 
 System_Boundary(monitoring_system, "Система Мониторинга") {
-    Container(prometheus, "Prometheus", "Go, TSDB", "Собирает и хранит метрики, проверяет alert rules и генерирует сырые алерты")
+    Container(prometheus, "Prometheus + Grafana", "Go, TSDB", "Собирает и хранит метрики, проверяет alert rules и генерирует сырые алерты")
     Container(alertmanager, "Alertmanager", "Go", "Группирует, фильтрует алерты и управляет логикой отправки уведомлений")
 }
 
