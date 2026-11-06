@@ -1,0 +1,65 @@
+@startuml
+skinparam componentStyle rectangle
+skinparam wrapWidth 250
+skinparam packageStyle rectangle
+skinparam monochrome true
+skinparam defaultFontName Arial
+
+component "API Gateway\n(Golang)" as gateway
+component "Catalog & Products Service\n(Golang)" as catalog
+component "RabbitMQ" as rabbitmq
+component "Media DB\n(PostgreSQL)" as mediadb
+component "Object Storage\n(MinIO, S3)" as s3
+
+package "Media Service" {
+  component "API Handler\n(gRPC / HTTP)" as ApiHandler {
+    interface "IMediaAPI" as IMediaAPI
+  }
+  component "Event Handler\n(AMQP consumer)" as EventHandler {
+    interface "IEventHandler" as IEventHandler
+  }
+  component "Auth Middleware\n(JWT)" as Auth
+
+  component "MediaService" as MediaService {
+    interface "IMediaService" as IMediaSvc
+  }
+  component "FileService" as FileService {
+    interface "IFileService" as IFileSvc
+  }
+
+  component "Media Repository" as MediaRepository {
+    interface "IMediaRepository" as IMediaRepo
+  }
+  component "Media Storage" as MediaStorage {
+    interface "IMediaStorage" as IMediaStorage
+  }
+  component "MinIO Adapter" as MinIOAdapter{
+    interface "IS3Adapter" as IS3Adapter
+  }
+  component "Catalog Adapter\n(gRPC client)" as CatalogAdapter
+  component "CSV Parser" as CsvParser
+  component "Excel Parser" as ExcelParser
+}
+
+gateway --> IMediaAPI : "gRPC / HTTPS"
+rabbitmq --> IEventHandler : "AMQP: ProductDeleted"
+
+IMediaAPI --> Auth : "Проверка JWT"
+IMediaAPI --> IMediaSvc : "Загрузить / Удалить"
+IMediaAPI --> IFileSvc : "Импорт / Эскпорт"
+IEventHandler --> IMediaSvc : "ProductDeleted (каскадное удаление)"
+
+MediaService --> IMediaRepo : "Сохранить / удалить метаданные"
+MediaService --> IMediaStorage : "Прочитать метаданные"
+MediaService --> IS3Adapter: "Записать файл"
+MediaService --> IS3Adapter: "Читать файл"
+FileService --> IS3Adapter : "Ссылки на экспортные файлы"
+FileService --> CatalogAdapter : "Обмен данными о товарах"
+FileService --> CsvParser : "Разбор CSV"
+FileService --> ExcelParser : "Разбор Excel"
+
+MediaRepository --> mediadb : "SQL / TCP"
+MediaStorage --> mediadb : "SQL / TCP"
+MinIOAdapter --> s3 : "S3 API / HTTPS"
+CatalogAdapter --> catalog : "gRPC"
+@enduml
