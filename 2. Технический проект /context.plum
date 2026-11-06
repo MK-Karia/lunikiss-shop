@@ -1,0 +1,26 @@
+@startuml
+!include <c4/C4_Context>
+
+System(marketplace, "Интернет-магазин одежды", "Веб-платформа для малых брендов одежды на микросервисной архитектуре", "Go, React, PostgreSQL, MinIO, RabbitMQ, Redis")
+
+Person(buyer, "Покупатель", "Ищет одежду, добавляет товары в корзину, оформляет заказы и возвраты, оставляет отзывы")
+Person(seller, "Продавец", "Работает с товарами, обрабатывает заказы и отзывы, смотрит аналитику")
+Person(admin, "Администратор", "Модерирует жалобы, возвраты, управляет учетными записями")
+Person(system_admin, "Системный администратор", "Работает с бэкапами, контролирует инфраструктуру сайта")
+
+System_Ext(psp, "Платежный шлюз (PSP)", "ЮKassa")
+System_Ext(delivery, "Службы доставки", "Почта России/СДЭК")
+System_Ext(notification_ext, "Шлюзы уведомлений", "Telegram Bot API/SMTP-сервер для отправки алертов")
+System_Ext(backup_s3, "Backup Storage", "Резервное хранилище")
+
+Rel(buyer, marketplace, "Использует веб-интерфейс", "HTTPS")
+Rel(seller, marketplace, "Управляет ассортиментом и заказами", "HTTPS")
+Rel(admin, marketplace, "Администрирует платформу", "HTTPS")
+Rel(system_admin, marketplace, "Управляет бэкапами", "HTTPS")
+
+Rel(marketplace, psp, "Проводит оплаты", "API / HTTPS")
+Rel(marketplace, notification_ext, "Отправляет алерты при падении сайта", "SMTP")
+Rel(marketplace, backup_s3, "Работа с бэкапами", "HTTPS / S3 API")
+Rel_Back(delivery, seller, "Работа с заказами", "Отправляют заказы или получают возвраты")
+Rel_Back(delivery, buyer, "Работа с заказами", "Забирают заказанные вещи или делают возврат")
+@enduml
