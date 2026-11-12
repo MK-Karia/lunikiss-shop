@@ -56,6 +56,9 @@ System_Boundary(marketplace_system, "Маркетплейс одежды") {
 
     Container(analytics_svc, "Analytics Service", "Go, REST/gRPC", "Сбор данных по продажам, выручке и заказам")
         gateway --> analytics_svc: "[gRPC]" 
+        analytics_svc --> order_db: "[Read-only; TCP/IP]"
+        analytics_svc --> payment_db: "[Read-only; TCP/IP]"
+        analytics_svc --> catalog_db: "[Read-only; TCP/IP]"
 
     Container(notif_svc, "Notification Service", "Go, Event Broker", "Хранение и отображение уведомлений")
         gateway --> notif_svc: "[gRPC]" 
@@ -101,5 +104,4 @@ Rel(rabbitmq, order_svc, "Подписка на события оплаты и �
 Rel(rabbitmq, notif_svc, "Подписка на события для уведомлений", "AMQP")
 Rel(prometheus, marketplace_system, "Стягивает метрики", "HTTP")
 Rel(prometheus, alertmanager, "Отправляет сработавшие алерты", "HTTP/JSON")
-
 @enduml
