@@ -37,9 +37,14 @@ package "Media Service" {
     interface "IS3Adapter" as IS3Adapter
   }
   component "Catalog Adapter\n(gRPC client)" as CatalogAdapter
+
+  interface "IFileParser" as IFileParser
   component "CSV Parser" as CsvParser
   component "Excel Parser" as ExcelParser
 }
+
+CsvParser ..|> IFileParser
+ExcelParser ..|> IFileParser
 
 gateway --> IMediaAPI : "gRPC / HTTPS"
 rabbitmq --> IEventHandler : "AMQP: ProductDeleted"
@@ -55,8 +60,8 @@ MediaService --> IS3Adapter: "Записать файл"
 MediaService --> IS3Adapter: "Читать файл"
 FileService --> IS3Adapter : "Ссылки на экспортные файлы"
 FileService --> CatalogAdapter : "Обмен данными о товарах"
-FileService --> CsvParser : "Разбор CSV"
-FileService --> ExcelParser : "Разбор Excel"
+FileService --> IFileParser: "Разбор CSV"
+FileService --> IFileParser: "Разбор Excel"
 
 MediaRepository --> mediadb : "SQL / TCP"
 MediaStorage --> mediadb : "SQL / TCP"
