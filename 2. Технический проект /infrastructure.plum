@@ -16,7 +16,7 @@ System_Ext(backup_s3, "Backup Storage", "Резервное хранилище (
 
 Boundary(cloud, "Облачный сервер в России (152-ФЗ)") {
     System_Boundary(prod, "Production кластер") {
-      Container(ingress, "Ingress Controller", "Nginx / ALB", "TLS-терминация, маршрутизация")
+      Container(ingress, "Ingress Controller", "Nginx", "TLS-терминация, маршрутизация")
       Container(services, "Микросервисы", "Go (REST/gRPC)", "Auth, Catalog, Media, Cart, Order, Payment, Review, Analytics, Notification, Backup")
       ContainerDb(postgres, "PostgreSQL", "Managed, Primary + Replica for analytics", "Реляционные данные")
       ContainerDb(redis, "Redis", "Sentinel", "Кеш корзин и сессий")
@@ -26,7 +26,7 @@ Boundary(cloud, "Облачный сервер в России (152-ФЗ)") {
     }
 
     System_Boundary(staging, "Stage кластер") {
-      Container(staging_ingress, "Ingress Controller", "Nginx / ALB", "TLS-терминация, маршрутизация")
+      Container(staging_ingress, "Ingress Controller", "Nginx", "TLS-терминация, маршрутизация")
       Container(staging_services, "Микросервисы (staging)", "Go", "Предпродакшн-тестирование")
       ContainerDb(staging_postgres, "PostgreSQL", "Managed, Primary", "Реляционные данные")
       ContainerDb(staging_redis, "Redis", "Sentinel", "Кеш корзин и сессий")
