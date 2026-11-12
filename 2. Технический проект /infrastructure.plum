@@ -1,0 +1,75 @@
+@startuml
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+title Интернет-магазин. C4 Infrastructure (System Landscape)
+
+Person(buyer, "Пользователь", "Ищет одежду, добавляет товары в корзину, оформляет заказы, оставляет отзывы и возвраты")
+Person(seller, "Продавец", "Работает с карточками товаров, управляет остатками, обрабатывает заказы и отзывы")
+Person(admin, "Администратор", "Модерирует жалобы, возвраты, управляет системными настройками")
+Person(system_admin, "Системный администратор", "Работает с бэкапами, контролирует инфраструктуру сайта")
+Person(test, "Разработчик/Тестировщик", "Проверяет корректную работу функционала в тестовой среде")
+
+System_Ext(psp, "Платёжный шлюз (PSP)", "ЮKassa")
+System_Ext(notification_ext, "Шлюзы уведомлений", "Telegram Bot API/SMTP-сервер для отправки алертов")
+System_Ext(backup_s3, "Backup Storage", "Резервное хранилище (Selectel Object Storage (S3) )")
+
+Boundary(cloud, "Облачный сервер в России (152-ФЗ)") {
+    System_Boundary(prod, "Production кластер") {
+      Container(ingress, "Ingress Controller", "Nginx / ALB", "TLS-терминация, маршрутизация")
+      Container(services, "Микросервисы", "Go (REST/gRPC)", "Auth, Catalog, Media, Cart, Order, Payment, Review, Analytics, Notification, Backup")
+      ContainerDb(postgres, "PostgreSQL", "Managed, Primary + Replica for analytics", "Реляционные данные")
+      ContainerDb(redis, "Redis", "Sentinel", "Кеш корзин и сессий")
+      ContainerQueue(rabbitmq, "RabbitMQ Cluster", "3 узла", "Событийная шина")
+      ContainerDb(minio, "MinIO", "S3", "Медиафайлы, объекты (hot data)")
+      Container(monitoring, "Monitoring Stack", "Prometheus, Grafana, Alertmanager", "Сбор метрик и алертинг")
+    }
+
+    System_Boundary(staging, "Stage кластер") {
+      Container(staging_ingress, "Ingress Controller", "Nginx / ALB", "TLS-терминация, маршрутизация")
+      Container(staging_services, "Микросервисы (staging)", "Go", "Предпродакшн-тестирование")
+      ContainerDb(staging_postgres, "PostgreSQL", "Managed, Primary", "Реляционные данные")
+      ContainerDb(staging_redis, "Redis", "Sentinel", "Кеш корзин и сессий")
+      ContainerQueue(staging_rabbitmq, "RabbitMQ Cluster", "3 узла", "Событийная шина")
+      ContainerDb(staging_minio, "MinIO", "S3", "Медиафайлы, объекты (hot data)")
+      Container(staging_monitoring, "Monitoring Stack", "Prometheus, Grafana, Alertmanager", "Сбор метрик и алертинг")
+    }
+
+    Container(cicd, "CI/CD", "GitHub Actions", "Сборка и деплой")
+}
+
+Rel(buyer, ingress, "Отправляет запросы через веб-интерфейс", "HTTPS")
+Rel(seller, ingress, "Отправляет запросы через веб-интерфейс", "HTTPS")
+Rel(admin, ingress, "Отправляет запросы через веб-интерфейс", "HTTPS")
+Rel(system_admin, ingress, "Отправляет запросы через веб-интерфейс", "HTTPS")
+Rel(test, staging_ingress, "Отправляет запросы через веб-интерфейс", "HTTPS")
+
+Rel(ingress, services, "Маршрутизирует запросы", "HTTP/gRPC")
+Rel(services, postgres, "Чтение/запись", "TCP")
+Rel(services, redis, "Кеширование", "TCP")
+Rel(services, rabbitmq, "Публикация/подписка", "AMQP")
+Rel(services, minio, "Хранение и чтение медиа", "S3 API")
+Rel(services, backup_s3, "Ежедневный полный дамп (03:00)", "S3 API / HTTPS")
+Rel(services, psp, "Платежи", "API/HTTPS")
+
+Rel(monitoring, services, "Сбор метрик", "HTTP")
+Rel(monitoring, postgres, "Сбор метрик", "HTTP")
+Rel(monitoring, redis, "Сбор метрик", "HTTP")
+Rel(monitoring, minio, "Сбор метрик", "HTTP")
+Rel(monitoring, notification_ext, "Алерты и уведомления", "SMTP / Telegram API")
+
+Rel(staging_ingress, staging_services, "Маршрутизирует запросы", "HTTP/gRPC")
+Rel(staging_services, staging_postgres, "Чтение/запись", "TCP")
+Rel(staging_services, staging_redis, "Кеширование", "TCP")
+Rel(staging_services, staging_rabbitmq, "Публикация/подписка", "AMQP")
+Rel(staging_services, staging_minio, "Хранение и чтение медиа", "S3 API")
+Rel(staging_services, psp, "Платежи", "API/HTTPS")
+
+Rel(staging_monitoring, staging_services, "Сбор метрик", "HTTP")
+Rel(staging_monitoring, staging_postgres, "Сбор метрик", "HTTP")
+Rel(staging_monitoring, staging_redis, "Сбор метрик", "HTTP")
+Rel(staging_monitoring, staging_minio, "Сбор метрик", "HTTP")
+
+Rel(cicd, prod, "Деплой", "Kubernetes API")
+Rel(cicd, staging, "Деплой", "Kubernetes API")
+@enduml
