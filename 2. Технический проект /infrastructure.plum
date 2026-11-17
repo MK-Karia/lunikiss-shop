@@ -1,74 +1,217 @@
-@startuml
+@startuml C4Infrastructure
 !include <C4/C4_Context>
 !include <C4/C4_Container>
 
-title Интернет-магазин. C4 Infrastructure (System Landscape)
+!include <tupadr3/devicons/postgresql>
+!include <tupadr3/devicons/redis>
+!include <tupadr3/devicons/nginx>
+!include <logos/rabbitmq>
 
-Person(buyer, "Пользователь", "Ищет одежду, добавляет товары в корзину, оформляет заказы, оставляет отзывы и возвраты")
-Person(seller, "Продавец", "Работает с карточками товаров, управляет остатками, обрабатывает заказы и отзывы")
-Person(admin, "Администратор", "Модерирует жалобы, возвраты, управляет системными настройками")
-Person(system_admin, "Системный администратор", "Работает с бэкапами, контролирует инфраструктуру сайта")
-Person(test, "Разработчик/Тестировщик", "Проверяет корректную работу функционала в тестовой среде")
+title Интернет-магазин. C4 Infrastructure (System Landscape)
+scale 0.45
+
+Person(buyer, "Пользователь", "Поиск одежды, корзина, заказы, отзывы, возвраты")
+Person(seller, "Продавец", "Карточки товаров, остатки, заказы, отзывы")
+Person(admin, "Администратор", "Модерация жалоб, возвратов, системные настройки")
+Person(system_admin, "Системный администратор", "Бэкапы, инфраструктура")
+Person(test, "Разработчик/Тестировщик", "Тестирование функционала в Stage")
 
 System_Ext(psp, "Платёжный шлюз (PSP)", "ЮKassa")
-System_Ext(notification_ext, "Шлюзы уведомлений", "Telegram Bot API/SMTP-сервер для отправки алертов")
-System_Ext(backup_s3, "Backup Storage", "Резервное хранилище (Selectel Object Storage (S3) )")
+System_Ext(notification_ext, "Шлюзы уведомлений", "Telegram Bot API / SMTP")
+System_Ext(backup_s3, "Backup Storage", "Selectel Object Storage (S3)")
 
 Boundary(cloud, "Облачный сервер в России (152-ФЗ)") {
-    System_Boundary(prod, "Production кластер") {
-      Container(ingress, "Ingress Controller", "Nginx", "TLS-терминация, маршрутизация")
-      Container(services, "Микросервисы", "Go (REST/gRPC)", "Auth, Catalog, Media, Cart, Order, Payment, Review, Analytics, Notification, Backup")
-      ContainerDb(postgres, "PostgreSQL", "Managed, Primary + Replica for analytics", "Реляционные данные")
-      ContainerDb(redis, "Redis", "Sentinel", "Кеш корзин и сессий")
-      ContainerQueue(rabbitmq, "RabbitMQ Cluster", "3 узла", "Событийная шина")
-      ContainerDb(minio, "MinIO", "S3", "Медиафайлы, объекты (hot data)")
-      Container(monitoring, "Monitoring Stack", "Prometheus, Grafana, Alertmanager", "Сбор метрик и алертинг")
-    }
+System_Boundary(prod, "Production кластер") {
+  Container(ingress, "Ingress Controller", "Nginx", "2 реплики", $sprite="nginx")
 
-    System_Boundary(staging, "Stage кластер") {
-      Container(staging_ingress, "Ingress Controller", "Nginx", "TLS-терминация, маршрутизация")
-      Container(staging_services, "Микросервисы (staging)", "Go", "Предпродакшн-тестирование")
-      ContainerDb(staging_postgres, "PostgreSQL", "Managed, Primary", "Реляционные данные")
-      ContainerDb(staging_redis, "Redis", "Sentinel", "Кеш корзин и сессий")
-      ContainerQueue(staging_rabbitmq, "RabbitMQ Cluster", "3 узла", "Событийная шина")
-      ContainerDb(staging_minio, "MinIO", "S3", "Медиафайлы, объекты (hot data)")
-      Container(staging_monitoring, "Monitoring Stack", "Prometheus, Grafana, Alertmanager", "Сбор метрик и алертинг")
-    }
-
-    Container(cicd, "CI/CD", "GitHub Actions", "Сборка и деплой")
+System_Boundary(microsvc, "Микросервисы") {
+  Container(gateway, " API Gateway", "Go", "2 реплики")
+  Container(auth_svc, "Auth & User", "Go", "2 реплики")
+  Container(payment_svc, "Payment", "Go", "3 реплики")
+  Container(order_svc, "Order & Checkout", "Go", "3 реплики")
+  Container(catalog_svc, "Catalog & Products", "Go", "3 реплики")
+  Container(cart_svc, "Cart & Wishlist", "Go", "3 реплики")
+  Container(media_svc, "Media", "Go", "2 реплики")
+  Container(review_svc, "Review & Complaint", "Go", "2 реплики")
+  Container(analytics_svc, "Analytics", "Go", "2 реплики")
+  Container(notification_svc, "Notification", "Go", "2 реплики")
+  Container(backup_svc, "Backup", "Go, Cron", "1 реплика")
 }
 
-Rel(buyer, ingress, "Отправляет запросы через веб-интерфейс", "HTTPS")
-Rel(seller, ingress, "Отправляет запросы через веб-интерфейс", "HTTPS")
-Rel(admin, ingress, "Отправляет запросы через веб-интерфейс", "HTTPS")
-Rel(system_admin, ingress, "Отправляет запросы через веб-интерфейс", "HTTPS")
-Rel(test, staging_ingress, "Отправляет запросы через веб-интерфейс", "HTTPS")
+  Container_Boundary(pg_group, "PostgreSQL") {
+    ContainerDb(pg_primary, "PG Primary", "Managed PostgreSQL", "Запись", $sprite="postgresql")
+    ContainerDb(pg_na_replica, "PG High Availability Replica", "Managed PostgreSQL", "НА реплика (Чтение)", $sprite="postgresql")
+    ContainerDb(pg_replica, "PG Replica", "Managed PostgreSQL", "Чтение для аналитики", $sprite="postgresql")
+  }
 
-Rel(ingress, services, "Маршрутизирует запросы", "HTTP/gRPC")
-Rel(services, postgres, "Чтение/запись", "TCP")
-Rel(services, redis, "Кеширование", "TCP")
-Rel(services, rabbitmq, "Публикация/подписка", "AMQP")
-Rel(services, minio, "Хранение и чтение медиа", "S3 API")
-Rel(services, backup_s3, "Ежедневный полный дамп (03:00)", "S3 API / HTTPS")
-Rel(services, psp, "Платежи", "API/HTTPS")
+  Container_Boundary(redis_group, "Redis") {
+    ContainerDb(redis_master, "Redis Master", "Redis", "Запись", $sprite="redis")
+    ContainerDb(redis_replica_1, "Redis Replica 1", "Redis", "Чтение", $sprite="redis")
+    ContainerDb(redis_replica_2, "Redis Replica 2", "Redis", "Чтение", $sprite="redis")
+    ContainerDb(redis_sentinel_1, "Sentinel 1", "Redis Sentinel", "", $sprite="redis")
+    ContainerDb(redis_sentinel_2, "Sentinel 2", "Redis Sentinel", "", $sprite="redis")
+    ContainerDb(redis_sentinel_3, "Sentinel 3", "Redis Sentinel", "", $sprite="redis")
+  }
 
-Rel(monitoring, services, "Сбор метрик", "HTTP")
-Rel(monitoring, postgres, "Сбор метрик", "HTTP")
-Rel(monitoring, redis, "Сбор метрик", "HTTP")
-Rel(monitoring, minio, "Сбор метрик", "HTTP")
-Rel(monitoring, notification_ext, "Алерты и уведомления", "SMTP / Telegram API")
+  Container_Boundary(rabbitmq_group, "RabbitMQ Cluster") {
+    ContainerQueue(rabbitmq_1, "RabbitMQ 1", "AMQP", "Событийная шина", $sprite="rabbitmq")
+    ContainerQueue(rabbitmq_2, "RabbitMQ 2", "AMQP", "Событийная шина", $sprite="rabbitmq")
+    ContainerQueue(rabbitmq_3, "RabbitMQ 3", "AMQP", "Событийная шина", $sprite="rabbitmq")
+  }
 
-Rel(staging_ingress, staging_services, "Маршрутизирует запросы", "HTTP/gRPC")
-Rel(staging_services, staging_postgres, "Чтение/запись", "TCP")
-Rel(staging_services, staging_redis, "Кеширование", "TCP")
-Rel(staging_services, staging_rabbitmq, "Публикация/подписка", "AMQP")
-Rel(staging_services, staging_minio, "Хранение и чтение медиа", "S3 API")
-Rel(staging_services, psp, "Платежи", "API/HTTPS")
+  Container_Boundary(minio_group, "MinIO (3 узла)") {
+    ContainerDb(minio_1, "MinIO 1", "S3", "Медиафайлы, объекты (hot data)")
+    ContainerDb(minio_2, "MinIO 2", "S3", "Медиафайлы, объекты (hot data)")
+    ContainerDb(minio_3, "MinIO 3", "S3", "Медиафайлы, объекты (hot data)")
+  }
 
-Rel(staging_monitoring, staging_services, "Сбор метрик", "HTTP")
-Rel(staging_monitoring, staging_postgres, "Сбор метрик", "HTTP")
-Rel(staging_monitoring, staging_redis, "Сбор метрик", "HTTP")
-Rel(staging_monitoring, staging_minio, "Сбор метрик", "HTTP")
+  Container(monitoring, "Monitoring Stack", "Prometheus, Grafana, Alertmanager", "Сбор метрик и алертинг")
+}
+
+System_Boundary(staging, "Stage кластер") {
+  Container(staging_ingress, "Ingress Controller", "Nginx", "TLS-терминация, маршрутизация", $sprite="nginx")
+
+System_Boundary(staging_microsvc, "Stage микросервисы") {
+  Container(staging_gateway, "API Gateway", "Go", "")
+  Container(staging_auth, "Auth & User", "Go", "2 реплики")
+  Container(staging_payment, "Payment", "Go", "2 реплики")
+  Container(staging_order, "Order & Checkout", "Go", "2 реплики")
+  Container(staging_catalog, "Catalog & Products", "Go", "1 реплика")
+  Container(staging_cart, "Cart & Wishlist", "Go", "1 реплика")
+  Container(staging_media, "Media", "Go", "1 реплика")
+  Container(staging_review, "Review", "Go", "1 реплика")
+  Container(staging_analytics, "Analytics", "Go", "1 реплика")
+  Container(staging_notification, "Notification", "Go", "1 реплика")
+  Container(staging_backup, "Backup", "Go, Cron", "1 реплика")
+}
+  
+  Container_Boundary(staging_redis_group, "Redis Sentinel") {
+    ContainerDb(staging_redis_master, "Redis Master", "Redis", "", $sprite="redis")
+    ContainerDb(staging_redis_replica, "Redis Replica", "Redis", "", $sprite="redis")
+    ContainerDb(staging_sentinel_1, "Sentinel 1", "Sentinel", "", $sprite="redis")
+    ContainerDb(staging_sentinel_2, "Sentinel 2", "Sentinel", "", $sprite="redis")
+    ContainerDb(staging_sentinel_3, "Sentinel 3", "Sentinel", "", $sprite="redis")
+  }
+
+  Container_Boundary(staging_rabbitmq_group, "RabbitMQ Cluster") {
+    ContainerQueue(staging_rabbitmq_1, "RabbitMQ 1", "AMQP", "", $sprite="rabbitmq")
+    ContainerQueue(staging_rabbitmq_2, "RabbitMQ 2", "AMQP", "", $sprite="rabbitmq")
+    ContainerQueue(staging_rabbitmq_3, "RabbitMQ 3", "AMQP", "", $sprite="rabbitmq")
+  }
+
+  ContainerDb(staging_pg, "PG Primary", "Managed PostgreSQL", "", $sprite="postgresql")
+  ContainerDb(staging_minio, "MinIO", "S3", "")
+  Container(staging_monitoring, "Monitoring Stack", "Prometheus, Grafana, Alertmanager", "Сбор метрик и алертинг")
+}
+
+Container(cicd, "CI/CD", "GitHub Actions", "Сборка и деплой")
+}
+
+Rel(buyer, ingress, "HTTPS")
+Rel(seller, ingress, "HTTPS")
+Rel(admin, ingress, "HTTPS")
+Rel(system_admin, ingress, "HTTPS")
+
+Rel(ingress, gateway, "HTTP/gRPC")
+Rel(gateway, auth_svc, "gRPC")
+Rel(gateway, payment_svc, "gRPC")
+Rel(gateway, order_svc, "gRPC")
+Rel(gateway, catalog_svc, "gRPC")
+Rel(gateway, cart_svc, "gRPC")
+Rel(gateway, media_svc, "gRPC")
+Rel(gateway, review_svc, "gRPC")
+Rel(gateway, analytics_svc, "gRPC")
+Rel(gateway, notification_svc, "gRPC")
+
+Rel(auth_svc, pg_group, "SQL / TCP")
+Rel(payment_svc, pg_group, "SQL / TCP")
+Rel(order_svc, pg_group, "SQL / TCP")
+Rel(catalog_svc, pg_group, "SQL / TCP")
+Rel(media_svc, pg_group, "SQL / TCP")
+Rel(review_svc, pg_group, "SQL / TCP")
+Rel(analytics_svc, pg_group, "SQL (read-only, replica)")
+Rel(cart_svc, redis_group, "Кеш / TCP")
+Rel(auth_svc, rabbitmq_group, "Публикация", "AMQP")
+Rel(order_svc, rabbitmq_group, "Публикация/подписка", "AMQP")
+Rel(catalog_svc, rabbitmq_group, "Публикация", "AMQP")
+Rel(review_svc, rabbitmq_group, "Публикация", "AMQP")
+Rel(payment_svc, rabbitmq_group, "Публикация", "AMQP")
+Rel(notification_svc, rabbitmq_group, "Подписка", "AMQP")
+Rel(media_svc, minio_group, "S3 API / HTTPS")
+Rel(backup_svc, pg_group, "pg_dump")
+Rel(backup_svc, minio_group, "minio_snapshot")
+Rel(backup_svc, backup_s3, "Дамп в 03:00", "S3 API")
+
+Rel(payment_svc, psp, "Платежи", "API/HTTPS")
+Rel(monitoring, notification_ext, "Алерты", "SMTP/Telegram")
+
+Rel(pg_primary, pg_replica, "Репликация", "TCP")
+Rel(pg_primary, pg_na_replica, "Репликация", "TCP")
+
+Rel(redis_master, redis_replica_1, "Репликация")
+Rel(redis_master, redis_replica_2, "Репликация")
+Rel(redis_sentinel_1, redis_master, "Мониторинг")
+Rel(redis_sentinel_2, redis_master, "Мониторинг")
+Rel(redis_sentinel_3, redis_master, "Мониторинг")
+
+Rel(rabbitmq_1, rabbitmq_2, "Кластер")
+Rel(rabbitmq_2, rabbitmq_3, "Кластер")
+Rel(rabbitmq_3, rabbitmq_1, "Кластер")
+
+Rel(minio_1, minio_2, "Репликация")
+Rel(minio_2, minio_3, "Репликация")
+Rel(minio_3, minio_1, "Репликация")
+
+Rel(monitoring, microsvc, "Метрики", "HTTP")
+Rel(monitoring, pg_group, "Метрики", "HTTP")
+Rel(monitoring, redis_group, "Метрики", "HTTP")
+Rel(monitoring, rabbitmq_group, "Метрики", "HTTP")
+Rel(monitoring, minio_group, "Метрики", "HTTP")
+
+Rel(test, staging_ingress, "HTTPS")
+Rel(staging_ingress, staging_gateway, "HTTP/gRPC")
+Rel(staging_gateway, staging_auth, "gRPC")
+Rel(staging_gateway, staging_payment, "gRPC")
+Rel(staging_gateway, staging_order, "gRPC")
+Rel(staging_gateway, staging_catalog, "gRPC")
+Rel(staging_gateway, staging_cart, "gRPC")
+Rel(staging_gateway, staging_media, "gRPC")
+Rel(staging_gateway, staging_review, "gRPC")
+Rel(staging_gateway, staging_analytics, "gRPC")
+Rel(staging_gateway, staging_notification, "gRPC")
+Rel(staging_gateway, staging_backup, "gRPC")
+
+Rel(staging_auth, staging_pg, "SQL/TCP")
+Rel(staging_payment, staging_pg, "SQL/TCP")
+Rel(staging_order, staging_pg, "SQL/TCP")
+Rel(staging_catalog, staging_pg, "SQL / TCP")
+Rel(staging_media, staging_pg, "SQL / TCP")
+Rel(staging_review, staging_pg, "SQL / TCP")
+Rel(staging_analytics, staging_pg, "SQL (read-only, replica)")
+Rel(staging_cart, staging_redis_group, "Кеш")
+Rel(staging_auth, staging_rabbitmq_group, "Публикация", "AMQP")
+Rel(staging_order, staging_rabbitmq_group, "Публикация/подписка", "AMQP")
+Rel(staging_catalog, staging_rabbitmq_group, "Публикация", "AMQP")
+Rel(staging_review, staging_rabbitmq_group, "Публикация", "AMQP")
+Rel(staging_payment, staging_rabbitmq_group, "Публикация", "AMQP")
+Rel(staging_notification, staging_rabbitmq_group, "Подписка", "AMQP")
+Rel(staging_media, staging_minio, "S3 API")
+Rel(staging_backup, staging_pg, "pg_dump")
+Rel(staging_backup, staging_minio, "minio_snapshot")
+Rel(staging_payment, psp, "Платежи (sandbox)", "API/HTTPS")
+
+Rel(staging_redis_master, staging_redis_replica, "Репликация")
+Rel(staging_sentinel_1, staging_redis_master, "Мониторинг")
+Rel(staging_sentinel_2, staging_redis_master, "Мониторинг")
+Rel(staging_sentinel_3, staging_redis_master, "Мониторинг")
+
+Rel(staging_monitoring, staging_microsvc, "Метрики")
+Rel(staging_monitoring, staging_pg, "Метрики")
+Rel(staging_monitoring, notification_ext, "Алерты", "SMTP/Telegram")
+
+Rel(staging_rabbitmq_1, staging_rabbitmq_2, "Кластер")
+Rel(staging_rabbitmq_2, staging_rabbitmq_3, "Кластер")
+Rel(staging_rabbitmq_3, staging_rabbitmq_1, "Кластер")
 
 Rel(cicd, prod, "Деплой", "Kubernetes API")
 Rel(cicd, staging, "Деплой", "Kubernetes API")
