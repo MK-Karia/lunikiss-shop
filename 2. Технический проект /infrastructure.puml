@@ -22,20 +22,20 @@ System_Ext(backup_s3, "Backup Storage", "Selectel Object Storage (S3)")
 
 Boundary(cloud, "Облачный сервер в России (152-ФЗ)") {
 System_Boundary(prod, "Production кластер") {
-  Container(ingress, "Ingress Controller", "Nginx", "2 реплики", $sprite="nginx")
+  Container(ingress, "Ingress Controller", "Nginx", "3 реплики", $sprite="nginx")
 
 System_Boundary(microsvc, "Микросервисы") {
-  Container(gateway, " API Gateway", "Go", "2 реплики")
-  Container(auth_svc, "Auth & User", "Go", "2 реплики")
-  Container(payment_svc, "Payment", "Go", "3 реплики")
-  Container(order_svc, "Order & Checkout", "Go", "3 реплики")
-  Container(catalog_svc, "Catalog & Products", "Go", "3 реплики")
-  Container(cart_svc, "Cart & Wishlist", "Go", "3 реплики")
-  Container(media_svc, "Media", "Go", "2 реплики")
-  Container(review_svc, "Review & Complaint", "Go", "2 реплики")
-  Container(analytics_svc, "Analytics", "Go", "2 реплики")
-  Container(notification_svc, "Notification", "Go", "2 реплики")
-  Container(backup_svc, "Backup", "Go, Cron", "1 реплика")
+  Container(gateway, " API Gateway", "Go", "3 реплики")
+  Container(auth_svc, "Auth & User", "Go", "4 реплики")
+  Container(payment_svc, "Payment", "Go", "5 реплик")
+  Container(order_svc, "Order & Checkout", "Go", "5 реплик")
+  Container(catalog_svc, "Catalog & Products", "Go", "5 реплик")
+  Container(cart_svc, "Cart & Wishlist", "Go", "5 реплик")
+  Container(media_svc, "Media", "Go", "4 реплики")
+  Container(review_svc, "Review & Complaint", "Go", "3 реплики")
+  Container(analytics_svc, "Analytics", "Go", "3 реплики")
+  Container(notification_svc, "Notification", "Go", "3 реплики")
+  Container(backup_svc, "Backup", "Go, Cron", "2 реплики")
 }
 
   Container_Boundary(pg_group, "PostgreSQL") {
@@ -72,17 +72,17 @@ System_Boundary(staging, "Stage кластер") {
   Container(staging_ingress, "Ingress Controller", "Nginx", "TLS-терминация, маршрутизация", $sprite="nginx")
 
 System_Boundary(staging_microsvc, "Stage микросервисы") {
-  Container(staging_gateway, "API Gateway", "Go", "")
-  Container(staging_auth, "Auth & User", "Go", "2 реплики")
-  Container(staging_payment, "Payment", "Go", "2 реплики")
-  Container(staging_order, "Order & Checkout", "Go", "2 реплики")
-  Container(staging_catalog, "Catalog & Products", "Go", "1 реплика")
-  Container(staging_cart, "Cart & Wishlist", "Go", "1 реплика")
-  Container(staging_media, "Media", "Go", "1 реплика")
-  Container(staging_review, "Review", "Go", "1 реплика")
-  Container(staging_analytics, "Analytics", "Go", "1 реплика")
-  Container(staging_notification, "Notification", "Go", "1 реплика")
-  Container(staging_backup, "Backup", "Go, Cron", "1 реплика")
+  Container(staging_gateway, "API Gateway", "Go", "2 реплики")
+  Container(staging_auth, "Auth & User", "Go", "3 реплики")
+  Container(staging_payment, "Payment", "Go", "3 реплики")
+  Container(staging_order, "Order & Checkout", "Go", "3 реплики")
+  Container(staging_catalog, "Catalog & Products", "Go", "2 реплики")
+  Container(staging_cart, "Cart & Wishlist", "Go", "3 реплики")
+  Container(staging_media, "Media", "Go", "3 реплики")
+  Container(staging_review, "Review", "Go", "2 реплики")
+  Container(staging_analytics, "Analytics", "Go", "2 реплики")
+  Container(staging_notification, "Notification", "Go", "2 реплики")
+  Container(staging_backup, "Backup", "Go, Cron", "2 реплики")
 }
   
   Container_Boundary(staging_redis_group, "Redis Sentinel") {
