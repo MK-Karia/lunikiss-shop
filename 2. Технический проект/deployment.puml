@@ -1,0 +1,159 @@
+@startuml C4Maintenance
+!include <C4/C4_Deployment>
+
+!include <tupadr3/devicons/postgresql>
+!include <tupadr3/devicons/redis>
+!include <tupadr3/devicons/nginx>
+!include <logos/rabbitmq>
+
+title Интернет-магазин. C4 Deployment & Maintenance
+scale 0.45
+
+Person(dev_role, "Разработчик", "Код, локальное тестирование, контроль пайплайна CI/CD, выкатка в Stage")
+Person(qa_role, "Тестировщик", "Приёмка и регресс на Stage перед релизом")
+Person(release_role, "Ведущий разработчик", "Контроль пайплайна CI/CD, выкатка и откат в Prod")
+Person(sysadmin_role, "Системный администратор", "Контроль узлов/железа, алертов")
+Person(devops_1, "DevOps-инженер", "Пайплайны GitHub Actions, деплоя образов, выкатка и откат в Stage/Prod")
+Person(devops_2, "DevOps-инженер", "Релизы, CI/CD, контроль Blue-Green развертывания")
+
+Deployment_Node(ext_infra, "Внешняя инфраструктура", "") {
+  Container_Ext(psp, "Платёжный шлюз (PSP)", "ЮKassa", "Prod и Sandbox API")
+  Container_Ext(notif_ext, "Шлюзы уведомлений", "Telegram Bot API / SMTP", "Алерты и уведомления")
+  Container_Ext(backup_s3, "Backup Storage", "Selectel Object Storage (S3)", "Ежедневные дампы в 03:00")
+}
+
+Deployment_Node(prod_cloud, "Production кластер") {
+  Container(prod_ingress, "Ingress Controller", "Nginx", "3 реплики", $sprite="nginx")
+
+  Deployment_Node(prod_app_nodes, "Узлы приложений") {
+    Container(gateway, "API Gateway", "Go", "3 реплики")
+    Container(auth_svc, "Auth & User", "Go", "4 реплики")
+    Container(payment_svc, "Payment", "Go", "5 реплик")
+    Container(order_svc, "Order & Checkout", "Go", "5 реплик")
+    Container(catalog_svc, "Catalog & Products", "Go", "5 реплик")
+    Container(cart_svc, "Cart & Wishlist", "Go", "5 реплик")
+    Container(media_svc, "Media", "Go", "4 реплики")
+    Container(review_svc, "Review & Complaint", "Go", "3 реплики")
+    Container(analytics_svc, "Analytics", "Go", "3 реплики")
+    Container(notification_svc, "Notification", "Go", "3 реплики")
+    Container(backup_svc, "Backup", "Go, Cron", "2 реплики")
+  }
+
+  Deployment_Node(prod_pg_nodes, "PostgreSQL Cluster") {
+    ContainerDb(pg_primary, "PG Primary", "Managed PostgreSQL", "Запись", $sprite="postgresql")
+    ContainerDb(pg_ha_replica, "PG HA Replica", "Managed PostgreSQL", "HA реплика (Чтение)", $sprite="postgresql")
+    ContainerDb(pg_replica, "PG Analytics Replica", "Managed PostgreSQL", "Чтение для аналитики", $sprite="postgresql")
+  }
+
+  Deployment_Node(prod_redis_nodes, "Redis Cluster") {
+    Deployment_Node(prod_redis_data_node, "Redis Master & Replicas") {
+        ContainerDb(redis_master, "Redis Master", "Redis", "Запись", $sprite="redis")
+        ContainerDb(redis_replica_1, "Redis Replica 1", "Redis", "Чтение", $sprite="redis")
+        ContainerDb(redis_replica_2, "Redis Replica 2", "Redis", "Чтение", $sprite="redis")
+    }
+
+    Deployment_Node(prod_redis_sentinel_node, "Redis Sentinel") {
+        ContainerDb(redis_sentinel_1, "Sentinel 1", "Redis Sentinel", "", $sprite="redis")
+        ContainerDb(redis_sentinel_2, "Sentinel 2", "Redis Sentinel", "", $sprite="redis")
+        ContainerDb(redis_sentinel_3, "Sentinel 3", "Redis Sentinel", "", $sprite="redis")
+    }
+  }
+
+  Deployment_Node(prod_rmq_nodes, "RabbitMQ Cluster") {
+    ContainerQueue(rabbitmq_1, "RabbitMQ 1", "AMQP", "Событийная шина", $sprite="rabbitmq")
+    ContainerQueue(rabbitmq_2, "RabbitMQ 2", "AMQP", "Событийная шина", $sprite="rabbitmq")
+    ContainerQueue(rabbitmq_3, "RabbitMQ 3", "AMQP", "Событийная шина", $sprite="rabbitmq")
+  }
+
+  Deployment_Node(prod_minio_nodes, "MinIO (3 узла)") {
+    ContainerDb(minio_1, "MinIO 1", "S3", "Медиафайлы, объекты (hot data)")
+    ContainerDb(minio_2, "MinIO 2", "S3", "Медиафайлы, объекты (hot data)")
+    ContainerDb(minio_3, "MinIO 3", "S3", "Медиафайлы, объекты (hot data)")
+  }
+
+  Container(monitoring, "Monitoring Stack", "Prometheus, Grafana, Alertmanager", "Сбор метрик и алертинг")
+}
+
+Deployment_Node(stage_cloud, "Stage кластер") {
+  Deployment_Node(stage_app_nodes, "Узлы приложений") {
+    Container(staging_ingress, "Ingress Controller", "Nginx", "TLS, маршрутизация", $sprite="nginx")
+    Container(staging_gateway, "API Gateway", "Go", "2 реплики")
+    Container(staging_auth, "Auth & User", "Go", "3 реплики")
+    Container(staging_payment, "Payment", "Go", "3 реплики")
+    Container(staging_order, "Order & Checkout", "Go", "3 реплики")
+    Container(staging_catalog, "Catalog & Products", "Go", "2 реплики")
+    Container(staging_cart, "Cart & Wishlist", "Go", "3 реплики")
+    Container(staging_media, "Media", "Go", "3 реплики")
+    Container(staging_review, "Review", "Go", "2 реплики")
+    Container(staging_analytics, "Analytics", "Go", "2 реплики")
+    Container(staging_notification, "Notification", "Go", "2 реплики")
+    Container(staging_backup, "Backup", "Go, Cron", "2 реплики")
+  }
+
+  ContainerDb(staging_pg, "PG Primary", "Managed PostgreSQL", "", $sprite="postgresql")
+  ContainerDb(staging_minio, "MinIO", "S3", "Медиафайлы, объекты (hot data)")
+
+  Deployment_Node(stage_redis_nodes, "Redis") {
+    Deployment_Node(stage_redis_data_node, "Stage Redis Master & Replicas") {
+      ContainerDb(staging_redis_master, "Redis Master", "Redis", "Кеш Stage", $sprite="redis")
+      ContainerDb(staging_redis_replica, "Redis Replica", "Redis", "Реплика Stage", $sprite="redis")
+    }
+
+    Deployment_Node(stage_redis_sentinel_node, "Stage Redis Sentinel") {
+      ContainerDb(staging_sentinel_1, "Sentinel 1", "Sentinel", "", $sprite="redis")
+      ContainerDb(staging_sentinel_2, "Sentinel 2", "Sentinel", "", $sprite="redis")
+      ContainerDb(staging_sentinel_3, "Sentinel 3", "Sentinel", "", $sprite="redis")
+    }
+  }
+
+  Deployment_Node(stage_rmq_nodes, "RabbitMQ Cluster") {
+    ContainerQueue(staging_rabbitmq_1, "RabbitMQ 1", "AMQP", "Кластер Stage", $sprite="rabbitmq")
+    ContainerQueue(staging_rabbitmq_2, "RabbitMQ 2", "AMQP", "Кластер Stage", $sprite="rabbitmq")
+    ContainerQueue(staging_rabbitmq_3, "RabbitMQ 3", "AMQP", "Кластер Stage", $sprite="rabbitmq")
+  }
+  
+  Container(staging_monitoring, "Monitoring Stack", "Prometheus, Grafana, Alertmanager", "Сбор метрик и алертинг")
+}
+
+Deployment_Node(cicd_node, "CI/CD Runner", "GitHub Actions") {
+  Container(cicd, "CI/CD Pipeline", "GitHub Actions", "Сборка образов Go и деплой")
+}
+
+Deployment_Node(registry_node, "Container Registry", "Хранилище версий образов") {
+  ContainerDb(registry, "Реестр образов", "", "Хранит v.1.5.2, v.1.5.3-rc, v.1.5.3")
+}
+
+Rel(dev_role, cicd, "Коммиты + ревью")
+Rel(devops_1, cicd, "Поддержка пайплайнов и деплоя")
+Rel(devops_2, cicd, "Контроль релизов, выкатки и отката")
+Rel(cicd, registry, "Push образа по тегу")
+Rel(cicd, stage_cloud, "Деплой в Stage с тегом вида v.1.5.3-featureName")
+Rel(stage_cloud, registry, "Pull образа")
+Rel(qa_role, stage_cloud, "Проверка и регресс в Stage")
+Rel(release_role, cicd, "Апрув релиза или его откат")
+Rel(prod_cloud, registry, "Pull образа")
+Rel(cicd, prod_cloud, "Выкатка в Prod с тегом вида v.1.5.3")
+
+Rel(sysadmin_role, prod_cloud, "Администрирование узлов, алертов, инцидентов")
+
+Rel(backup_svc, prod_pg_nodes, "pg_dump", "SQL / TCP")
+Rel(backup_svc, prod_minio_nodes, "minio_snapshot", "S3 API")
+Rel(backup_svc, backup_s3, "Выгрузка бэкапа в 03:00", "S3 API / HTTPS")
+
+Rel(monitoring, prod_ingress, "Метрики", "HTTP")
+Rel(monitoring, prod_app_nodes, "Метрики", "HTTP")
+Rel(monitoring, prod_pg_nodes, "Метрики", "HTTP")
+Rel(monitoring, prod_redis_nodes, "Метрики", "HTTP")
+Rel(monitoring, prod_rmq_nodes, "Метрики", "HTTP")
+Rel(monitoring, prod_minio_nodes, "Метрики", "HTTP")
+Rel(monitoring, notif_ext, "Алерты", "SMTP / Telegram")
+Rel(staging_monitoring, stage_app_nodes, "Метрики", "HTTP")
+Rel(staging_monitoring, staging_pg, "Метрики", "HTTP")
+Rel(staging_monitoring, staging_minio, "Метрики", "HTTP")
+Rel(staging_monitoring, stage_redis_nodes, "Метрики", "HTTP")
+Rel(staging_monitoring, stage_rmq_nodes, "Метрики", "HTTP")
+Rel(staging_monitoring, notif_ext, "Алерты", "SMTP / Telegram")
+
+Rel(payment_svc, psp, "Платежи", "API / HTTPS")
+Rel(staging_payment, psp, "Платежи", "API / HTTPS")
+@enduml
